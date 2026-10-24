@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Driveway – Home EV charging</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#080c0b;--side:#0c1110;--card:#121817;--card2:#171f1d;--line:#1f2b28;--ink:#eef4f1;--mute:#7d8f89;--g:#3ddc97;--warn:#f0b04a;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:500 14px/1.45 Manrope,system-ui,sans-serif}
+h1,h2,h3,p{margin:0}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--card2);border-radius:10px;padding:8px 12px}
+button.p{background:var(--g);color:#04130c;border-color:var(--g);font-weight:800}
+button:disabled{opacity:.4;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--g);outline-offset:2px}
+.app{display:grid;grid-template-columns:210px minmax(0,1fr) 320px;min-height:100vh}
+aside{background:var(--side);border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:16px}
+.logo{display:flex;align-items:center;gap:8px;font-weight:800;font-size:20px}
+.logo svg{width:26px;fill:var(--g)}
+.sec{font-size:12px;color:var(--mute);margin-bottom:8px}
+.car{width:100%;text-align:left;background:var(--card);padding:10px;margin-bottom:8px;display:block}
+.car.on{border-color:var(--g)}.car small{color:var(--mute)}
+.promo{margin-top:auto;background:linear-gradient(160deg,#0f3d2b,var(--card));border:1px solid var(--line);border-radius:12px;padding:12px;font-size:12px}
+.promo b{display:block;font-size:14px}
+main{padding:16px 18px 28px;min-width:0}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.crumb{color:var(--mute);font-size:11px}h1{font-size:24px;font-weight:800}
+.steps{display:flex;gap:6px;flex-wrap:wrap}
+.steps span{font-size:12px;padding:5px 10px;border-radius:99px;background:var(--card);border:1px solid var(--line);color:var(--mute)}
+.steps .done{color:var(--g)}.steps .on{background:var(--g);color:#04130c;border-color:var(--g);font-weight:800}
+.banner{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:13px}
+.banner.good{border-left-color:var(--g)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+.mh{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.mh h2{font-size:18px;font-weight:800}
+.mh form{display:flex;gap:6px;flex-wrap:wrap}
+input[type=text],input[type=number],select{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;max-width:100%}
+.mh input[type=text]{width:180px}
+.tg.on{border-color:var(--g);color:var(--g)}
+#map{height:440px;border-radius:12px;background:#0c1312}
+.leaflet-container{font:inherit}
+.leaflet-control-attribution{background:rgba(8,12,11,.75)!important;color:var(--mute)!important}
+.leaflet-control-attribution a{color:var(--g)!important}
+.pin{width:30px;height:30px;border-radius:50%;background:var(--g);border:2px solid #04130c;display:grid;place-items:center;box-shadow:0 0 0 4px rgba(61,220,151,.25)}
+.pin svg{width:16px;fill:#04130c}.pin.off{background:#5b6d67;box-shadow:none}.pin.on{box-shadow:0 0 0 7px rgba(61,220,151,.5)}
+.cards{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 8px;margin-top:14px}
+.st{flex:0 0 min(31%,230px);min-width:190px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;text-align:left;display:block}
+.st.sel{border-color:var(--g);box-shadow:0 0 0 1px var(--g)}
+.ico{width:30px;height:30px;border:2px solid var(--g);border-radius:8px;display:inline-grid;place-items:center}.ico svg{width:16px;fill:var(--g)}
+.dist{font-size:19px;font-weight:600;color:#cdd8d4;margin:10px 0 2px}.nm{font-weight:800;font-size:15px}
+.fs{display:flex;justify-content:space-between;gap:6px;margin-top:10px;font-size:11px;color:var(--mute)}.fs b{display:block;color:var(--ink);font-size:13px;margin-top:2px}
+.r{display:flex;flex-direction:column;gap:14px;padding:16px 16px 28px 0}
+.r h3{font-size:14px;font-weight:800;margin-bottom:6px}
+.slots{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.slots .on{background:var(--g);color:#04130c;border-color:var(--g);font-weight:800}
+.kv{display:grid;grid-template-columns:1fr auto;gap:3px 10px;margin:8px 0;font-size:13px}.kv span:nth-child(even){text-align:right;font-weight:800}
+.bar{height:10px;border-radius:6px;background:var(--card2);overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:var(--g);transition:width .3s}
+label.ck{display:flex;gap:8px;margin:6px 0;font-size:13px}
+.ok{color:var(--g)}.no{color:var(--warn)}.note{font-size:12px;color:var(--mute)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid var(--line);padding:7px 0;font-size:13px}
+.full{width:100%}
+#addf{display:grid;gap:8px}#addf input,#addf select{width:100%}
+@media(max-width:1100px){.app{grid-template-columns:minmax(0,1fr) 300px}aside{display:none}}
+@media(max-width:780px){.app{grid-template-columns:1fr}.r{padding:0 18px 28px}.st{flex-basis:78%}#map{height:340px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <div class="logo"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>Driveway</div>
+  <div><div class="sec">My vehicle</div><div id="cars"></div></div>
+  <div class="promo"><b>Host a charger</b>Earn money when neighbors charge at your home. Use the “List your charger” form.</div>
+</aside>
+
+<main>
+  <div class="top"><div><div class="crumb">Pages / Stations</div><h1>Stations</h1></div><div class="steps" id="steps"></div></div>
+  <div id="banner"></div>
+  <section class="panel">
+    <div class="mh"><h2 id="loc">Your area</h2>
+      <form id="sf"><button type="button" class="tg on" id="tg" aria-pressed="true">Fits my plug</button>
+      <input type="text" id="q" placeholder="Search area, e.g. Indiranagar" aria-label="Search area"><button type="submit">Search</button><button type="button" id="gps">Use my location</button></form></div>
+    <div id="map"></div>
+  </section>
+  <div class="cards" id="cards"></div>
+</main>
+
+<div class="r">
+  <section class="panel" id="book"></section>
+  <section class="panel" id="veh"></section>
+  <section class="panel"><h3>Host inbox</h3><p class="note">Hosts see booking requests here and confirm them.</p><div id="inbox"></div></section>
+  <section class="panel"><h3>List your charger</h3>
+    <form id="addf">
+      <input type="text" id="a_name" placeholder="Your name or place" required>
+      <input type="text" id="a_area" placeholder="Area, e.g. Indiranagar" required>
+      <select id="a_plug" aria-label="Plug type"><option>Type2</option><option>CCS2</option><option>3-pin</option></select>
+      <input type="number" id="a_kw" step="0.1" min="0.5" placeholder="Power in kW, e.g. 7.4" required>
+      <input type="number" id="a_price" step="0.5" min="1" placeholder="Price per kWh in ₹" required>
+      <input type="text" id="a_slots" placeholder="Slots, e.g. 5:00 pm, 7:00 pm" required>
+      <input type="text" id="a_notes" placeholder="Notes, e.g. covered parking">
+      <p class="note" id="a_loc">Click the map to set your charger’s location.</p>
+      <button class="p" type="submit">Add charger</button>
+    </form></section>
+  <section class="panel" id="led" hidden><h3>Payments</h3><div id="lb"></div></section>
+</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ============ 1. YOUR SETTINGS (edit these) ============ */
+const SUPABASE_URL = 'https://rxntbyhwuxfzpgfrgcms.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_GzsNECFJxaBR9WwyYnBg7w_P638_KMf';
+const START = [12.8231, 80.0442];   // SRM Institute of Science and Technology, Kattankulathur (lat, lng)
+const FEE = 10;                     // service fee in ₹
+
+/* ============ 2. DATABASE (falls back to demo mode with no keys) ============ */
+const CONFIGURED = !SUPABASE_URL.includes('PASTE') && typeof supabase !== 'undefined';
+const db = CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+const mem = { b: [] };   // demo-mode storage (lost on refresh)
+const DEMO = [
+ {id:1,host_name:'Meera’s garage',area:'Indiranagar',lat:12.9784,lng:77.6408,plug:'Type2',kw:7.4,price_per_kwh:10,slots:['5:00 pm','7:00 pm','9:00 pm'],notes:'Covered garage. Call on arrival.',rating:4.8},
+ {id:2,host_name:'Kumar apartment parking',area:'Koramangala',lat:12.9352,lng:77.6245,plug:'CCS2',kw:11,price_per_kwh:12,slots:['6:00 pm','8:00 pm'],notes:'Visitor parking, basement level 1.',rating:4.6},
+ {id:3,host_name:'Anita’s driveway',area:'Jayanagar',lat:12.9299,lng:77.5824,plug:'3-pin',kw:3.3,price_per_kwh:8,slots:['4:00 pm','7:30 pm','10:00 pm'],notes:'Bring your own cable.',rating:4.7}];
+
+async function getChargers(){
+  if(!db) return S.chargers.length?S.chargers:DEMO;
+  const {data,error}=await db.from('chargers').select('*');
+  if(error) throw error;
+  return data;
+}
+async function addCharger(row){
+  if(!db){S.chargers.push({...row,id:Date.now(),rating:null});return}
+  const {error}=await db.from('chargers').insert(row);
+  if(error) throw error;
+}
+async function listBookings(){
+  if(!db) return mem.b;
+  const since=new Date(); since.setHours(0,0,0,0);   // only today's bookings block slots
+  const {data,error}=await db.from('bookings').select('*').gte('created_at',since.toISOString());
+  if(error) throw error;
+  return data;
+}
+async function createBooking(cid,slot){
+  if(!db){const r={id:mem.b.length+1,charger_id:cid,slot,driver_name:'Demo driver',status:'requested'};mem.b.push(r);return r}
+  const {data,error}=await db.from('bookings').insert({charger_id:cid,slot,driver_name:'Demo driver'}).select().single();
+  if(error) throw error;
+  return data;
+}
+async function setStatus(id,status){
+  if(!db){const r=mem.b.find(x=>x.id===id);if(r)r.status=status;return}
+  const {error}=await db.from('bookings').update({status}).eq('id',id);
+  if(error) throw error;
+}
+async function savePayment(bid,kwh,amount){
+  if(!db) return;
+  const {error}=await db.from('payments').insert({booking_id:bid,kwh,amount});
+  if(error) throw error;
+}
+
+/* ============ 3. APP DATA ============ */
+const BOLT='<svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>';
+const CARS=[
+ {n:'Tata Nexon EV',plugs:['Type2','CCS2'],b:40,soc:35,max:7.2,kmpk:5},
+ {n:'Tata Tiago EV',plugs:['Type2'],b:24,soc:20,max:3.3,kmpk:6},
+ {n:'Electric scooter',plugs:['3-pin'],b:3.7,soc:15,max:0.9,kmpk:25}];
+const S={me:{lat:START[0],lng:START[1],n:'Your area'},car:0,only:true,sel:null,slot:null,trip:null,chargers:[],bookings:[],ledger:[],sig:'',timer:null};
+const $=i=>document.getElementById(i);
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const rs=n=>'₹'+(+n).toFixed(2);
+const car=()=>CARS[S.car];
+const lock=()=>S.trip&&S.trip.status!=='paid';
+function km(a,b,c,d){const r=x=>x*Math.PI/180,h=Math.sin(r(c-a)/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(r(d-b)/2)**2;return 12742*Math.asin(Math.sqrt(h))}
+const dist=c=>km(S.me.lat,S.me.lng,c.lat,c.lng);
+const fits=c=>car().plugs.includes(c.plug);
+const taken=(c,s)=>S.bookings.some(b=>b.charger_id===c.id&&b.slot===s&&b.status!=='cancelled');
+const freeCount=c=>(c.slots||[]).filter(s=>!taken(c,s)).length;
+const need=()=>Math.max(0,(80-car().soc)/100*car().b);
+const eta=c=>{const h=need()/Math.min(c.kw,car().max)*1.08;return h<1?Math.round(h*60)+' min':Math.floor(h)+' h '+Math.round(h%1*60)+' min'};
+const vis=()=>S.chargers.filter(c=>!S.only||fits(c)).sort((a,b)=>dist(a)-dist(b));
+const cur=()=>S.chargers.find(c=>c.id===S.sel);
+
+/* ============ 4. MAP (Leaflet + free OpenStreetMap-based tiles) ============ */
+const map=L.map('map').setView(START,15);
+const BASES={
+ 'Streets (CARTO Voyager)':L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:20,attribution:'© OpenStreetMap contributors © CARTO'}),
+ 'Streets (OpenStreetMap)':L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}),
+ 'Streets (Esri)':L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles © Esri'}),
+ 'Satellite (Esri)':L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles © Esri'}),
+ 'Dark (CARTO)':L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:19,attribution:'© OpenStreetMap contributors © CARTO'})};
+/* Free map layers, no API key. If one fails to load (blocked or offline), the map tries the next one automatically. */
+const ORDER=['Streets (Esri)','Streets (CARTO Voyager)','Streets (OpenStreetMap)'];
+let baseI=0,loaded=false,failed=0,auto=false,manual=false;
+function useBase(i){
+  auto=true;
+  Object.values(BASES).forEach(l=>{if(map.hasLayer(l))map.removeLayer(l)});
+  baseI=i;loaded=false;failed=0;BASES[ORDER[i]].addTo(map);
+  auto=false;
+}
+Object.values(BASES).forEach(l=>{
+  l.on('tileload',()=>{loaded=true});
+  l.on('tileerror',()=>{if(!manual&&!loaded&&BASES[ORDER[baseI]]===l&&++failed>=3&&baseI<ORDER.length-1)useBase(baseI+1)});
+});
+useBase(0);
+map.on('baselayerchange',()=>{if(!auto)manual=true});
+L.control.layers(BASES,null,{position:'topright'}).addTo(map);
+const meMarker=L.circleMarker(START,{radius:8,color:'#fff',weight:2,fillColor:'#2f6bff',fillOpacity:1}).addTo(map).bindTooltip('SRM Institute of Science and Technology, Kattankulathur');
+let pins=[],route=null;
+const icon=(on,ok)=>L.divIcon({className:'',html:`<div class="pin${on?' on':''}${ok?'':' off'}">${BOLT}</div>`,iconSize:[30,30],iconAnchor:[15,15]});
+function drawMap(){
+  pins.forEach(m=>m.remove());pins=[];if(route){route.remove();route=null}
+  vis().forEach(c=>{
+    const m=L.marker([c.lat,c.lng],{icon:icon(c.id===S.sel,freeCount(c)>0)}).addTo(map).bindTooltip(esc(c.host_name)+' · ₹'+(+c.price_per_kwh)+'/kWh');
+    m.on('click',()=>pick(c.id));pins.push(m)});
+  const c=cur();
+  if(c)route=L.polyline([[S.me.lat,S.me.lng],[c.lat,c.lng]],{color:'#3ddc97',weight:3}).addTo(map);
+}
+function setMe(lat,lng,name){
+  S.me={lat,lng,n:name||'Your area'};meMarker.setLatLng([lat,lng]);map.setView([lat,lng],15);
+  if(!lock()){S.sel=null;S.slot=null}render();
+}
+$('sf').onsubmit=async e=>{e.preventDefault();const v=$('q').value.trim();if(!v)return;
+  try{const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=in&q='+encodeURIComponent(v+', India'));
+    const j=await r.json();if(!j.length){alert('Place not found. Try a more specific name.');return}
+    setMe(+j[0].lat,+j[0].lon,v)}catch(err){alert('Search failed. Check your internet connection.')}};
+$('gps').onclick=()=>navigator.geolocation.getCurrentPosition(
+  p=>setMe(p.coords.latitude,p.coords.longitude,'Your location'),
+  ()=>alert('Location is blocked. Type an area instead.'));
+$('tg').onclick=()=>{S.only=!S.only;$('tg').classList.toggle('on',S.only);$('tg').setAttribute('aria-pressed',S.only);
+  if(!lock()&&S.sel&&!vis().some(c=>c.id===S.sel))S.sel=null;render()};
+
+/* ---- List your charger: click the map to set its location ---- */
+let newPos=null,newPin=null;
+map.on('click',e=>{
+  newPos=e.latlng;if(newPin)newPin.remove();
+  newPin=L.marker(e.latlng).addTo(map);
+  $('a_loc').textContent='Location set: '+e.latlng.lat.toFixed(4)+', '+e.latlng.lng.toFixed(4);
+});
+$('addf').onsubmit=async e=>{
+  e.preventDefault();
+  if(!newPos){alert('Click the map to set the charger location first.');return}
+  const row={host_name:$('a_name').value.trim(),area:$('a_area').value.trim(),lat:newPos.lat,lng:newPos.lng,
+    plug:$('a_plug').value,kw:+$('a_kw').value,price_per_kwh:+$('a_price').value,
+    slots:$('a_slots').value.split(',').map(s=>s.trim()).filter(Boolean),notes:$('a_notes').value.trim()};
+  if(!row.slots.length){alert('Add at least one time slot.');return}
+  try{
+    await addCharger(row);S.chargers=await getChargers();
+    if(newPin){newPin.remove();newPin=null}newPos=null;
+    $('addf').reset();$('a_loc').textContent='Charger added. Click the map to add another.';render();
+  }catch(err){alert('Could not add charger: '+(err.message||err))}
+};
+
+/* ============ 5. SCREENS ============ */
+function pick(id){if(S.trip)return;S.sel=S.sel===id?null:id;S.slot=null;render()}
+function renderSteps(){
+  const t=S.trip,at=t?(t.status==='paid'?4:t.status==='requested'?2:3):(S.sel?2:1);
+  $('steps').innerHTML=['Search','Discover','Book','Charge & pay'].map((x,i)=>`<span class="${i<at?'done':i===at?'on':''}">${i+1}. ${x}</span>`).join('');
+}
+function renderCars(){
+  $('cars').innerHTML=CARS.map((k,i)=>`<button class="car ${i===S.car?'on':''}" data-car="${i}" ${lock()?'disabled':''}><b>${k.n}</b><br><small>${k.plugs.join(' / ')} · ${k.b} kWh<br>Battery <span class="${k.soc<25?'no':'ok'}">${Math.round(k.soc)}%</span></small></button>`).join('');
+  const k=car(),t=S.trip,soc=t&&['charging','done'].includes(t.status)?t.soc:k.soc;
+  $('veh').innerHTML=`<h3>Vehicle stats</h3><div class="kv"><span>Vehicle</span><span>${k.n}</span><span>Battery</span><span class="${soc<25?'no':'ok'}">${Math.round(soc)}%</span><span>Range</span><span>${Math.round(soc/100*k.b*k.kmpk)} km</span><span>Plug</span><span>${k.plugs.join(' / ')}</span></div><div class="bar"><i style="width:${soc}%"></i></div>`;
+}
+function renderCards(){
+  const ls=vis();
+  $('cards').innerHTML=ls.length?ls.map(c=>{const f=freeCount(c);
+    return `<button class="st ${c.id===S.sel?'sel':''}" data-sel="${c.id}" ${S.trip?'disabled':''}><span class="ico">${BOLT}</span><div class="dist">${dist(c).toFixed(1)} km</div><div class="nm">${esc(c.host_name)} <span class="note">★ ${c.rating?(+c.rating).toFixed(1):'New'}</span></div>
+    <div class="fs"><span>Plug<b>${esc(c.plug)}</b></span><span>Price<b>₹${+c.price_per_kwh}/kWh</b></span><span>Slots<b class="${f?'':'no'}">${f}</b></span></div></button>`}).join('')
+   :'<div class="panel" style="width:100%">No chargers fit this vehicle here. Turn off “Fits my plug”, pick another vehicle, or search another area.</div>';
+}
+function renderBook(){
+  const el=$('book'),t=S.trip,c=t?t.c:cur();
+  if(!c){el.innerHTML='<h3>Book a charge</h3><p class="note">Pick a station on the map or in the list to see time slots and estimates. Distances are straight-line.</p>';return}
+  let h=`<h3>${esc(c.host_name)}</h3><div class="note">${esc(c.area||'')} · ${c.kw} kW · ${esc(c.plug)}${t?' · '+esc(t.slot):''}</div>`;
+  if(c.notes)h+=`<p class="note" style="margin:6px 0">${esc(c.notes)}</p>`;
+  if(!t){
+    h+=`<div class="slots">${(c.slots||[]).map(s=>{const b=taken(c,s);return `<button data-slot="${esc(s)}" class="${S.slot===s?'on':''}" ${b?'disabled':''}>${esc(s)}${b?' (booked)':''}</button>`}).join('')}</div>
+    <div class="kv"><span>Charge ${Math.round(car().soc)}→80%</span><span>${need()>0?eta(c):'–'}</span><span>Energy</span><span>${need().toFixed(1)} kWh</span><span>Estimate</span><span>${rs(need()*c.price_per_kwh+FEE)}</span></div>
+    ${fits(c)?'':'<p class="no">Your plug doesn’t match this charger.</p>'}${need()<=0?'<p class="no">Battery is already at 80% or more.</p>':''}
+    <button class="p full" data-act="request" ${S.slot&&fits(c)&&need()>0?'':'disabled'}>Request booking</button>`;
+  }else{
+    const cost=t.kwh*c.price_per_kwh,tot=cost+FEE,s=t.status;
+    if(s==='requested')h+=`<p style="margin:8px 0">Request sent. Waiting for the host to confirm in the Host inbox.</p><button data-act="cancel">Cancel request</button>`;
+    else if(s==='confirmed')h+=`<p class="ok" style="margin:8px 0">Confirmed. Do a quick safety check:</p>${['Cable and plug look undamaged','Plug fully seated, vehicle parked and off','Area is dry and clear'].map((x,i)=>`<label class="ck"><input type="checkbox" data-chk="${i}" ${t.checks[i]?'checked':''}>${x}</label>`).join('')}<button class="p full" data-act="start" ${t.checks.every(Boolean)?'':'disabled'}>Start charging</button>`;
+    else if(s==='charging')h+=`<p style="margin:8px 0">Charging… <b>${Math.round(t.soc)}%</b> (stops at 80%)</p><div class="bar"><i style="width:${t.soc}%"></i></div><div class="kv"><span>Energy</span><span>${t.kwh.toFixed(2)} kWh</span><span>Cost so far</span><span>${rs(cost)}</span></div><button class="full" data-act="stop">Stop charging</button>`;
+    else if(s==='done')h+=`<div class="kv"><span>Energy ${t.kwh.toFixed(2)} kWh × ₹${+c.price_per_kwh}</span><span>${rs(cost)}</span><span>Service fee</span><span>${rs(FEE)}</span><span>Total</span><span>${rs(tot)}</span></div><button class="p full" data-act="pay">Pay ${rs(tot)}</button><p class="note">Demo only. No real money is taken.</p>`;
+    else h+=`<p class="ok" style="margin:8px 0"><b>Paid ${rs(t.amount)}.</b> Payment recorded.</p><button class="p full" data-act="again">Book another charge</button>`;
+  }
+  el.innerHTML=h;
+}
+function renderInbox(){
+  const rows=S.bookings.filter(b=>b.status==='requested');
+  $('inbox').innerHTML=rows.length?rows.map(b=>{const c=S.chargers.find(x=>x.id===b.charger_id);
+    return `<div class="row"><span>${esc(c?c.host_name:'Charger')} · ${esc(b.slot)}<br><span class="note">${esc(b.driver_name||'Driver')}</span></span><button class="p" data-host="${b.id}">Confirm</button></div>`}).join('')
+   :'<div class="row note">No pending requests.</div>';
+}
+function renderLedger(){
+  $('led').hidden=!S.ledger.length;
+  $('lb').innerHTML=S.ledger.map(r=>`<div class="row"><span>${r.ref}<br><span class="note">${esc(r.host)} · ${r.kwh} kWh</span></span><b>${rs(r.amount)}</b></div>`).join('');
+}
+function render(){renderSteps();renderCars();drawMap();renderCards();renderBook();renderInbox();renderLedger();$('loc').textContent=S.me.n}
+
+/* ============ 6. ACTIONS ============ */
+async function finish(){clearInterval(S.timer);const t=S.trip;if(!t)return;t.status='done';try{await setStatus(t.id,'done')}catch(e){}renderBook();renderCars()}
+async function act(a){
+  const t=S.trip;
+  try{
+    if(a==='request'){const c=cur(),row=await createBooking(c.id,S.slot);
+      S.trip={id:row.id,c,slot:S.slot,status:'requested',checks:[0,0,0],soc:car().soc,soc0:car().soc,kwh:0,car:S.car};await sync(true)}
+    else if(a==='cancel'){await setStatus(t.id,'cancelled');S.trip=null;await sync(true)}
+    else if(a==='start'){t.status='charging';await setStatus(t.id,'charging');const k=CARS[t.car];
+      S.timer=setInterval(()=>{t.soc=Math.min(80,t.soc+1.2);t.kwh=(t.soc-t.soc0)/100*k.b;if(t.soc>=80)finish();else{renderBook();renderCars()}},350)}
+    else if(a==='stop')await finish();
+    else if(a==='pay'){t.amount=t.kwh*t.c.price_per_kwh+FEE;await savePayment(t.id,t.kwh,t.amount);await setStatus(t.id,'paid');
+      CARS[t.car].soc=t.soc;t.status='paid';S.ledger.unshift({ref:'DW'+(1000+t.id),host:t.c.host_name,kwh:t.kwh.toFixed(2),amount:t.amount});await sync(true)}
+    else if(a==='again'){S.trip=null;S.sel=null;S.slot=null}
+  }catch(err){alert('Something went wrong: '+(err.message||err))}
+  render();
+}
+document.addEventListener('click',async e=>{
+  const x=e.target.closest('[data-sel],[data-slot],[data-act],[data-car],[data-host]');if(!x)return;const d=x.dataset;
+  if(d.sel)pick(+d.sel);
+  else if(d.slot){S.slot=d.slot;renderBook()}
+  else if(d.car!==undefined){if(!lock()){S.car=+d.car;S.slot=null;render()}}
+  else if(d.host){try{await setStatus(+d.host,'confirmed');await sync(true)}catch(err){alert(err.message||err)}}
+  else act(d.act)});
+document.addEventListener('change',e=>{const t=S.trip;if(t&&e.target.dataset.chk!==undefined){t.checks[+e.target.dataset.chk]=e.target.checked?1:0;renderBook()}});
+
+/* ============ 7. KEEP IN SYNC WITH THE DATABASE (every 3 seconds) ============ */
+async function sync(force){
+  try{S.bookings=await listBookings()}catch(e){return}
+  const t=S.trip,row=t&&S.bookings.find(b=>b.id===t.id);
+  if(row&&t.status==='requested'&&row.status==='confirmed')t.status='confirmed';
+  const sig=JSON.stringify(S.bookings.map(b=>[b.id,b.status]))+(t?t.status:'');
+  if(force||sig!==S.sig){S.sig=sig;render()}
+}
+
+/* ============ 8. START ============ */
+(async function(){
+  const b=$('banner');
+  try{S.chargers=await getChargers();
+    b.innerHTML=CONFIGURED?'<div class="banner good">Connected to your Supabase database.</div>':'<div class="banner"><b>Demo mode.</b> Sample chargers are shown and nothing is saved. Add your Supabase URL and key at the top of the script to connect your database.</div>'}
+  catch(err){S.chargers=DEMO;b.innerHTML=`<div class="banner"><b>Could not load chargers:</b> ${esc(err.message)}. Showing sample data. Run setup.sql in Supabase and check your keys.</div>`}
+  if(CONFIGURED&&!S.chargers.length)b.innerHTML='<div class="banner"><b>Connected, but the chargers table is empty.</b> Run setup.sql in Supabase, or add a charger with the “List your charger” form.</div>';
+  await sync(true);
+  setInterval(()=>sync(false),3000);
+})();
+</script>
+</body>
+</html>
