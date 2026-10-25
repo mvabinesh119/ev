@@ -141,6 +141,14 @@ body[data-role=driver] .ho,body[data-role=host] .do{display:none!important}
 .toast{position:fixed;top:16px;right:16px;z-index:3500;max-width:320px;background:var(--card);border:1px solid var(--g);border-left-width:5px;border-radius:12px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.45);animation:slidein .45s cubic-bezier(.2,.8,.2,1) both}
 .toast.bye{animation:fade .4s forwards}
 @keyframes slidein{from{opacity:0;transform:translateX(60px)}to{opacity:1;transform:none}}
+#zoom{position:fixed;inset:0;z-index:4000;display:grid;place-items:center;background:rgba(0,0,0,.86);cursor:zoom-out;padding:16px}
+#zoom[hidden]{display:none}
+#zoom img{max-width:92vw;max-height:88vh;width:auto;height:auto;background:#fff;border-radius:14px;padding:12px;animation:pop .35s both}
+img[data-zoom]{cursor:zoom-in}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.row.col{flex-direction:column;align-items:stretch;gap:8px}
+.warnbox{border:1px solid var(--warn);color:var(--warn);border-radius:10px;padding:10px;margin:8px 0;animation:shake .4s}
+.toast.bad{border-color:var(--warn)}
 #au_err.ok{color:var(--g)}#au_err.no{color:var(--warn)}
 .who{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--mute)}
 </style>
@@ -173,6 +181,7 @@ body[data-role=driver] .ho,body[data-role=host] .do{display:none!important}
   <p class="note">Drag to set how much charge your vehicle has right now.</p>
   <button class="p" id="bat_ok" type="button">Save and continue</button>
 </div></div>
+<div id="zoom" hidden><img id="zoom_img" alt="UPI QR code enlarged"></div>
 <div class="app">
 <aside>
   <div class="logo"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>Driveway</div>
@@ -208,7 +217,7 @@ body[data-role=driver] .ho,body[data-role=host] .do{display:none!important}
       <input type="text" id="a_notes" placeholder="Notes, e.g. covered parking">
       <label class="note" for="a_qr">UPI payment QR code (image). Drivers scan it to pay you.</label>
       <input type="file" id="a_qr" accept="image/*" required>
-      <img class="qrp" id="a_qrp" alt="QR preview" hidden>
+      <img class="qrp" id="a_qrp" data-zoom alt="QR preview" hidden>
       <p class="note" id="a_loc">Click the map to set your charger’s location.</p>
       <button class="p" type="submit">Add charger</button>
     </form></section>
@@ -255,15 +264,16 @@ async function listBookings(){
 }
 async function createBooking(cid,slot){
   if(!db){const r={id:mem.b.length+1,charger_id:cid,slot,driver_name:'Demo driver',status:'requested'};mem.b.push(r);return r}
-  const {data,error}=await db.from('bookings').insert({charger_id:cid,slot,driver_name:S.user.name+(CARS[S.car].type?' ('+CARS[S.car].type+', '+CARS[S.car].n+')':''),driver_id:S.user.id}).select().single();
+  const {data,error}=await db.from('bookings').insert({charger_id:cid,slot,driver_name:S.user.name+(CARS[S.car].type?' ('+CARS[S.car].type+', '+CARS[S.car].n+')':''),driver_id:S.user.id,batt_kwh:CARS[S.car].b}).select().single();
   if(error) throw error;
   return data;
 }
-async function setStatus(id,status){
-  if(!db){const r=mem.b.find(x=>x.id===id);if(r)r.status=status;return}
-  const {error}=await db.from('bookings').update({status}).eq('id',id);
+async function setBooking(id,f){
+  if(!db){const r=mem.b.find(x=>x.id===id);if(r)Object.assign(r,f);return}
+  const {error}=await db.from('bookings').update(f).eq('id',id);
   if(error) throw error;
 }
+const setStatus=(id,status)=>setBooking(id,{status});
 async function savePayment(bid,kwh,amount){
   if(!db) return;
   const {error}=await db.from('payments').insert({booking_id:bid,kwh,amount});
@@ -407,23 +417,34 @@ function renderBook(){
     ${fits(c)?'':'<p class="no">Your plug doesn’t match this charger.</p>'}${need()<=0?'<p class="no">Battery is already at 80% or more.</p>':''}
     <button class="p full" data-act="request" ${S.slot&&fits(c)&&need()>0?'':'disabled'}>Request booking</button>`;
   }else{
-    const cost=t.kwh*c.price_per_kwh,tot=cost+FEE,s=t.status;
+    const cost=t.kwh*c.price_per_kwh,tot=t.amount||cost+FEE,s=t.status;
+    const qr=c.upi_qr&&String(c.upi_qr).startsWith('data:image/')?`<div class="qr"><img src="${esc(c.upi_qr)}" data-zoom alt="UPI QR code" title="Tap to enlarge"><p class="note">Tap the QR to enlarge it. Scan it with any UPI app and pay <b>${rs(tot)}</b> to ${esc(c.host_name)}.</p></div>`:'<p class="no">This host has not added a payment QR yet.</p>';
+    const bill=`<div class="kv"><span>Battery</span><span>${t.sp}% → ${t.ep}%</span><span>Energy ${(+t.kwh).toFixed(2)} kWh × ₹${+c.price_per_kwh}</span><span>${rs(cost)}</span><span>Service fee</span><span>${rs(FEE)}</span><span>Total</span><span>${rs(tot)}</span></div>`;
     if(s==='requested')h+=`<p style="margin:8px 0">Request sent. Waiting for the host to confirm in the Host inbox.</p><button data-act="cancel">Cancel request</button>`;
     else if(s==='confirmed')h+=`<p class="ok" style="margin:8px 0">Confirmed. Do a quick safety check:</p>${['Cable and plug look undamaged','Plug fully seated, vehicle parked and off','Area is dry and clear'].map((x,i)=>`<label class="ck"><input type="checkbox" data-chk="${i}" ${t.checks[i]?'checked':''}>${x}</label>`).join('')}<button class="p full" data-act="start" ${t.checks.every(Boolean)?'':'disabled'}>Start charging</button>`;
-    else if(s==='charging')h+=`<p style="margin:8px 0">Charging… <b>${Math.round(t.soc)}%</b> (stops at 80%)</p><div class="bar"><i style="width:${t.soc}%"></i></div><div class="kv"><span>Energy</span><span>${t.kwh.toFixed(2)} kWh</span><span>Cost so far</span><span>${rs(cost)}</span></div><button class="full" data-act="stop">Stop charging</button>`;
-    else if(s==='done')h+=`<div class="kv"><span>Energy ${t.kwh.toFixed(2)} kWh × ₹${+c.price_per_kwh}</span><span>${rs(cost)}</span><span>Service fee</span><span>${rs(FEE)}</span><span>Total</span><span>${rs(tot)}</span></div>${c.upi_qr&&String(c.upi_qr).startsWith('data:image/')?`<div class="qr"><img src="${esc(c.upi_qr)}" alt="UPI QR code"><p class="note">Scan with any UPI app and pay <b>${rs(tot)}</b> to ${esc(c.host_name)}.</p></div>`:'<p class="no">This host has not added a payment QR yet.</p>'}<button class="p full" data-act="pay">I have paid ${rs(tot)}</button><p class="note">After you pay in your UPI app, tap this button. The host is told that the payment was received.</p>`;
-    else h+=`<svg class="chk" viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M14 27l8 8 16-17"/></svg><p class="ok" style="margin:8px 0;text-align:center"><b>Paid ${rs(t.amount)}.</b> Payment recorded. This station is shown on the map and open for bookings again.</p><button class="p full" data-act="again">Book another charge</button>`;
+    else if(s==='charging')h+=`<p style="margin:8px 0"><b>Charging started.</b> Is your charge completed?</p><div class="two"><button class="p" data-act="complete">Yes, charge completed</button><button data-act="notyet">Not yet</button></div>${t.notyet?'<p class="note">No problem. Tap “Yes” when your charge is finished.</p>':''}`;
+    else if(s==='completed')h+=`<p style="margin:8px 0">Charge completed. Waiting for the host to enter the starting and ending battery %. Your bill will appear here.</p>`;
+    else if(s==='payment_due')h+=`${bill}${qr}<button class="p full" data-act="paid">I have paid ${rs(tot)}</button><p class="note">After paying in your UPI app, tap the button. The host will approve it.</p>`;
+    else if(s==='pay_submitted')h+=`${bill}<p style="margin:8px 0">Payment submitted. Waiting for the host to approve it.</p>`;
+    else if(s==='not_received')h+=`<div class="warnbox"><b>Payment not received.</b> The host did not receive your payment. Please pay again.</div>${bill}${qr}<button class="p full" data-act="paid">I have paid again ${rs(tot)}</button>`;
+    else h+=`${bill}<svg class="chk" viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M14 27l8 8 16-17"/></svg><p class="ok" style="margin:8px 0;text-align:center"><b>Payment approved ${rs(tot)}.</b> The host received your payment. This station is shown on the map and open for bookings again.</p><button class="p full" data-act="again">Book another charge</button>`;
   }
   el.innerHTML=h;
 }
 function renderInbox(){
-  const rows=S.bookings.filter(b=>b.status==='requested'&&S.chargers.some(c=>c.id===b.charger_id));
-  $('inbox').innerHTML=rows.length?rows.map(b=>{const c=S.chargers.find(x=>x.id===b.charger_id);
-    return `<div class="row"><span>${esc(c?c.host_name:'Charger')} · ${esc(b.slot)}<br><span class="note">${esc(b.driver_name||'Driver')}</span></span><button class="p" data-host="${b.id}">Confirm</button></div>`}).join('')
+  const live=['requested','confirmed','charging','completed','payment_due','pay_submitted','not_received'];
+  const mine=S.bookings.filter(b=>S.chargers.some(c=>c.id===b.charger_id)&&live.includes(b.status));
+  const label={confirmed:'Confirmed. Waiting for the driver to start',charging:'Charging in progress',payment_due:'Waiting for the driver to pay',not_received:'Marked not received. Waiting for the driver to pay again'};
+  $('inbox').innerHTML=mine.length?mine.map(b=>{const c=S.chargers.find(x=>x.id===b.charger_id),who=`${esc(c?c.host_name:'Charger')} · ${esc(b.slot)}<br><span class="note">${esc(b.driver_name||'Driver')}</span>`;
+    if(b.status==='requested')return `<div class="row"><span>${who}</span><button class="p" data-host="${b.id}">Confirm</button></div>`;
+    if(b.status==='completed')return `<div class="row col"><span>${who}<br><b>Charge completed.</b> Enter the battery % shown on the vehicle.</span><div class="two"><input type="number" id="sp${b.id}" min="0" max="99" placeholder="Starting %"><input type="number" id="ep${b.id}" min="1" max="100" placeholder="Ending %"></div><button class="p" data-bill="${b.id}">Calculate and send bill</button></div>`;
+    if(b.status==='pay_submitted')return `<div class="row col"><span>${who}<br><b>Driver says paid ${rs(b.amount)}</b> (${b.start_pct}% → ${b.end_pct}%). Check your UPI app.</span><div class="two"><button class="p" data-approve="${b.id}">Approve payment</button><button data-reject="${b.id}">Not received</button></div></div>`;
+    return `<div class="row note"><span>${who}</span><span>${label[b.status]}</span></div>`}).join('')
    :'<div class="row note">No pending requests.</div>';
 }
+
 let pays=[],payInit=false;const paySeen=new Set();
-function toast(m){const t=document.createElement('div');t.className='toast';t.innerHTML=m;document.body.appendChild(t);
+function toast(m,bad){const t=document.createElement('div');t.className='toast'+(bad?' bad':'');t.innerHTML=m;document.body.appendChild(t);
   setTimeout(()=>{t.classList.add('bye');setTimeout(()=>t.remove(),450)},7000)}
 function renderRecv(){const el=$('recv');if(!el)return;
   el.innerHTML=pays.length?pays.slice(0,15).map(p=>{const b=S.bookings.find(x=>x.id===p.booking_id),c=b&&S.chargers.find(x=>x.id===b.charger_id);
@@ -433,8 +454,6 @@ async function syncPay(){
   if(!db)return;
   const {data,error}=await db.from('payments').select('*');if(error)return;
   const fresh=data.filter(p=>!paySeen.has(p.id??p.booking_id));data.forEach(p=>paySeen.add(p.id??p.booking_id));
-  if(payInit)fresh.forEach(p=>{const b=S.bookings.find(x=>x.id===p.booking_id);
-    toast('<b>Payment received: '+rs(p.amount)+'</b><br><span class="note">'+esc(b?b.driver_name||'A driver':'A driver')+(b?' · '+esc(b.slot):'')+'</span>')});
   payInit=true;pays=data.sort((a,b)=>(b.id||0)-(a.id||0));renderRecv();
 }
 function renderLedger(){
@@ -444,40 +463,64 @@ function renderLedger(){
 function render(){renderSteps();renderCars();drawMap();renderCards();renderBook();renderInbox();renderRecv();renderLedger();$('loc').textContent=S.me.n}
 
 /* ============ 6. ACTIONS ============ */
-async function finish(){clearInterval(S.timer);const t=S.trip;if(!t)return;t.status='done';try{await setStatus(t.id,'done')}catch(e){}renderBook();renderCars()}
 async function act(a){
   const t=S.trip;
   try{
     if(a==='request'){const c=cur(),row=await createBooking(c.id,S.slot);
       S.trip={id:row.id,c,slot:S.slot,status:'requested',checks:[0,0,0],soc:car().soc,soc0:car().soc,kwh:0,car:S.car};await sync(true)}
     else if(a==='cancel'){await setStatus(t.id,'cancelled');S.trip=null;await sync(true)}
-    else if(a==='start'){t.status='charging';await setStatus(t.id,'charging');const k=CARS[t.car];
-      S.timer=setInterval(()=>{t.soc=Math.min(80,t.soc+1.2);t.kwh=(t.soc-t.soc0)/100*k.b;if(t.soc>=80)finish();else{renderBook();renderCars()}},350)}
-    else if(a==='stop')await finish();
-    else if(a==='pay'){t.amount=t.kwh*t.c.price_per_kwh+FEE;await savePayment(t.id,t.kwh,t.amount);await setStatus(t.id,'paid');
-      CARS[t.car].soc=t.soc;if(db&&S.user.role==='driver')db.auth.updateUser({data:{vehicle:CARS[t.car]}});t.status='paid';S.ledger.unshift({ref:'DW'+(1000+t.id),host:t.c.host_name,kwh:t.kwh.toFixed(2),amount:t.amount});await sync(true);confetti();showStation(t.c)}
+    else if(a==='start'){await setBooking(t.id,{status:'charging'});t.status='charging'}
+    else if(a==='notyet')t.notyet=true;
+    else if(a==='complete'){await setBooking(t.id,{status:'completed'});t.status='completed'}
+    else if(a==='paid'){await setBooking(t.id,{status:'pay_submitted'});t.status='pay_submitted'}
     else if(a==='again'){S.trip=null;S.sel=null;S.slot=null}
   }catch(err){alert('Something went wrong: '+(err.message||err))}
   render();
 }
 document.addEventListener('click',async e=>{
-  const x=e.target.closest('[data-sel],[data-slot],[data-act],[data-car],[data-host]');if(!x)return;const d=x.dataset;
+  const x=e.target.closest('[data-sel],[data-slot],[data-act],[data-car],[data-host],[data-bill],[data-approve],[data-reject]');if(!x)return;const d=x.dataset;
   if(d.sel)pick(+d.sel);
   else if(d.slot){S.slot=d.slot;renderBook()}
   else if(d.car!==undefined){if(!lock()){S.car=+d.car;S.slot=null;render()}}
   else if(d.host){try{await setStatus(+d.host,'confirmed');await sync(true)}catch(err){alert(err.message||err)}}
+  else if(d.bill){const id=+d.bill,sp=+$('sp'+id).value,ep=+$('ep'+id).value,b=S.bookings.find(y=>y.id===id),c=S.chargers.find(y=>y.id===b.charger_id);
+    if(!(sp>=0&&ep>sp&&ep<=100)){alert('Enter a starting % and a higher ending % (0 to 100).');return}
+    const kwh=(ep-sp)/100*(+b.batt_kwh||0);if(!kwh){alert('This booking has no battery size saved.');return}
+    try{await setBooking(id,{status:'payment_due',start_pct:sp,end_pct:ep,kwh:+kwh.toFixed(3),amount:+(kwh*c.price_per_kwh+FEE).toFixed(2)});await sync(true)}catch(err){alert(err.message||err)}}
+  else if(d.approve){try{const b=S.bookings.find(y=>y.id===+d.approve);await savePayment(b.id,+b.kwh,+b.amount);await setBooking(b.id,{status:'paid'});await sync(true)}catch(err){alert(err.message||err)}}
+  else if(d.reject){try{await setBooking(+d.reject,{status:'not_received'});await sync(true)}catch(err){alert(err.message||err)}}
   else act(d.act)});
+document.addEventListener('click',e=>{const i=e.target.closest('img[data-zoom]');if(i){$('zoom_img').src=i.src;$('zoom').hidden=false}else if(e.target.closest('#zoom'))$('zoom').hidden=true});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('zoom').hidden=true});
 document.addEventListener('change',e=>{const t=S.trip;if(t&&e.target.dataset.chk!==undefined){t.checks[+e.target.dataset.chk]=e.target.checked?1:0;renderBook()}});
 
 /* ============ 7. KEEP IN SYNC WITH THE DATABASE (every 3 seconds) ============ */
+const seenSt={};let stInit=false;
+const LIVE=['requested','confirmed','charging','completed','payment_due','pay_submitted','not_received'];
 async function sync(force){
   try{S.bookings=await listBookings()}catch(e){return}
-  if(S.user&&S.user.role==='host')await syncPay();
-  const t=S.trip,row=t&&S.bookings.find(b=>b.id===t.id);
-  if(row&&t.status==='requested'&&row.status==='confirmed')t.status='confirmed';
+  const host=S.user&&S.user.role==='host';
+  if(host)await syncPay();
+  S.bookings.forEach(b=>{const o=seenSt[b.id];seenSt[b.id]=b.status;
+    if(!stInit||o===b.status||!host||!S.chargers.some(c=>c.id===b.charger_id))return;
+    if(b.status==='completed')toast('<b>Charge completed</b><br><span class="note">'+esc(b.driver_name||'Driver')+': enter the starting and ending battery %.</span>');
+    if(b.status==='pay_submitted')toast('<b>Payment submitted: '+rs(b.amount)+'</b><br><span class="note">'+esc(b.driver_name||'Driver')+': approve it or mark it not received.</span>')});
+  stInit=true;
+  let t=S.trip;
+  if(!host&&!t&&db&&S.user){const b=[...S.bookings].reverse().find(x=>x.driver_id===S.user.id&&LIVE.includes(x.status)),c=b&&S.chargers.find(x=>x.id===b.charger_id);
+    if(c){S.sel=c.id;t=S.trip={id:b.id,c,slot:b.slot,status:b.status,checks:[1,1,1],kwh:+b.kwh||0,amount:+b.amount||0,sp:b.start_pct,ep:b.end_pct,car:S.car}}}
+  const row=t&&S.bookings.find(b=>b.id===t.id);
+  if(row&&row.status!==t.status&&['requested','completed','pay_submitted'].includes(t.status)){
+    t.status=row.status;t.kwh=+row.kwh||0;t.amount=+row.amount||0;t.sp=row.start_pct;t.ep=row.end_pct;
+    if(row.status==='payment_due')toast('<b>Your bill is ready: '+rs(t.amount)+'</b><br><span class="note">Scan the QR and pay.</span>');
+    if(row.status==='not_received')toast('<b>Payment not received</b><br><span class="note">The host did not receive your payment. Please pay again.</span>',true);
+    if(row.status==='paid'){S.ledger.unshift({ref:'DW'+(1000+t.id),host:t.c.host_name,kwh:t.kwh.toFixed(2),amount:t.amount});
+      CARS[t.car].soc=+t.ep;if(db)db.auth.updateUser({data:{vehicle:CARS[t.car]}});
+      toast('<b>Payment approved</b><br><span class="note">The host received '+rs(t.amount)+'.</span>');confetti();showStation(t.c)}}
   const sig=JSON.stringify(S.bookings.map(b=>[b.id,b.status]))+(t?t.status:'');
   if(force||sig!==S.sig){S.sig=sig;render()}
 }
+
 
 /* ============ 8. START ============ */
 async function startApp(){
